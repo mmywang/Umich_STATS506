@@ -1,0 +1,383 @@
+---
+title: "STAT506PS4"
+format:
+  pdf:
+    documentclass: scrreprt
+    toc: true
+    toc-depth: 3
+    listings: true
+editor: visual
+execute:
+  error: TRUE
+---
+
+```{r}
+library("tidyverse")
+library("nycflights13")
+library("dplyr")
+library("survey")
+library("haven")
+```
+
+## Question1
+
+\(1\)
+
+```{r}
+data("flights")
+```
+
+```{r}
+colnames(flights)
+```
+
+```{r}
+#The first table Dep_delay
+Dep_delay <- flights%>%
+  group_by(origin)%>%
+  dplyr::filter(n() >= 10) %>%   
+  summarize(Dep_delay_mean = mean(dep_delay,na.rm = TRUE), Dep_delay_median = median(dep_delay,na.rm = TRUE))%>%
+  arrange(desc(Dep_delay_mean))%>%
+  left_join(airports, by = c("origin" = "faa")) %>%
+  select(origin = name, Dep_delay_mean, Dep_delay_median)
+print(Dep_delay,n = Inf)
+```
+
+```{r}
+#The second table Arr_delay
+Arr_delay <- flights %>%
+  group_by(dest)%>%
+    dplyr::filter(n()>=10)%>%
+  summarize(Arr_delay_mean = mean(arr_delay,na.rm = TRUE),Arr_delay_median = median(arr_delay,na.rm = TRUE))%>%
+  arrange(desc(Arr_delay_mean))%>%
+  left_join(airports,by = c("dest" = "faa"))%>%
+  select(dest = name,Arr_delay_mean, Arr_delay_median)
+print(Arr_delay,n = Inf)
+```
+
+\(b\)
+
+```{r}
+
+```
+
+## Question2
+
+```{r}
+get_temp <- function(month,year,data,celsius = FALSE,average_fn = mean){
+  #Check valid year
+  if (!is.numeric(year)|| year < min(data$year) || year > max(data$year)){
+    stop("Invalid year input")
+  }
+  #Check valid year and transfer year to abbreviated month format
+  month_names_abbrev <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec") 
+  month_names_full <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+  if (month %in% month_names_full){
+  month <- month_names_abbrev[which(month_names_full == month)]
+  } else if (is.numeric(month)){
+  if(month > 12 || month < 1){
+    stop("Invalid month input.")
+  }
+  month <- month_names_abbrev[month]
+} else if(!month %in% month_names_abbrev) {
+  stop("Invalid month")
+}
+  #get the result
+  avg_temp <- data %>%
+    filter(year == !!year & month == !!month) %>%
+    summarise(avg_temperature = average_fn(temp)) %>%
+    pull(avg_temperature)
+  #check the format for temperature
+  if(celsius) {
+    avg_temp <- (avg_temp - 32) * 5/9
+  }
+  return(avg_temp)
+}
+```
+
+```{r}
+nnmaps <- read.csv("/Users/meredithwang/Downloads/chicago-nmmaps.csv")
+get_temp("Apr", 1999, data = nnmaps)
+```
+
+```{r}
+get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
+```
+
+```{r}
+get_temp(10, 1998, data = nnmaps, average_fn = median)
+```
+
+```{r}
+get_temp(13, 1998, data = nnmaps)
+```
+
+```{r}
+get_temp(2, 2005, data = nnmaps)
+```
+
+```{r}
+get_temp("November", 1999, data =nnmaps, celsius = TRUE,
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         })
+```
+
+## Question3
+
+\(a\)
+
+``` sas
+/* import data */
+proc import datafile="/home/u63646271/sasuser.v94/recs2020_public_v5.csv" out=recs2020 replace;
+
+/* Calculate the weights for all states */
+proc sql noprint;
+   /* weight of each state */
+   create table state_weights as
+   select state_name, sum(NWEIGHT) as total_weight
+   from recs2020
+   group by state_name;
+   
+   select sum(NWEIGHT) into :totalWeight from recs2020;
+   
+   /* percentage of each state and sort */
+   create table state_percent as
+   select state_name, 
+          total_weight / &totalWeight as percentage
+   from state_weights
+   order by percentage desc;
+run;
+
+/* Calculate the highest percentage */
+proc print data=state_percent(obs=1); 
+   var state_name percentage;
+run;
+
+/* Calculate the Percentage of All Records for Michigan */
+proc sql;
+   select state_name, percentage 
+   from state_percent 
+   where state_name = "Michigan";
+run;
+```
+
+\(b\)
+
+``` sas
+data positive_elec_cost;
+    set recs2020;
+    if DOLLAREL > 0;
+run;
+
+proc sgplot data=positive_elec_cost;
+    histogram DOLLAREL;
+    title "Histogram of Total Electricity Cost (Strictly Positive Values)";
+    xaxis label="Total Electricity Cost";
+    yaxis label="Number of Houses";
+run;
+```
+
+\(c\)
+
+``` sas
+data log_elec_cost;
+    set recs2020;
+    if DOLLAREL > 0 then log_elec = log(DOLLAREL); 
+    else delete; 
+run;
+
+/* Plot the histogram */
+proc sgplot data=log_elec_cost;
+    histogram log_elec;
+    title "Histogram of Log-transformed Total Electricity Cost";
+    xaxis label="Log of Total Electricity Cost";
+    yaxis label="Number of Houses";
+run;
+```
+
+\(d\)
+
+``` sas
+data prep_data;
+    set recs2020;
+    if DOLLAREL > 0 then log_elec = log(DOLLAREL);
+    else delete; 
+
+    if PRKGPLC1 = 1 then has_garage = 1;
+    else has_garage = 0;
+    
+run;
+
+proc reg data=prep_data;
+    model log_elec = TOTROOMS has_garage;
+    weight NWEIGHT; 
+    title "Linear Regression Model Predicting Log of Electricity Cost";
+run;
+```
+
+（e)
+
+``` sas
+/* Fit the model and save the predicted values */
+proc reg data=prep_data outest=estimates noprint;
+    model log_elec = TOTROOMS has_garage;
+    output out=predicted_data p=pred_log_elec;
+run;
+
+data predicted_data;
+    set predicted_data;
+    pred_elec_cost = exp(pred_log_elec); 
+run;
+
+proc sgplot data=predicted_data;
+    scatter x=DOLLAREL y=pred_elec_cost;
+    lineparm x=0 y=0 slope=1 / clip; 
+    title "Scatterplot of Predicted vs. Actual Total Electricity Cost";
+run;
+```
+
+## Question4
+
+\(b\)
+
+``` sas
+/* import data to SAS */
+proc import datafile="/home/u63646271/sasuser.v94/public2022.csv" out=public2022 replace;
+
+/* Question4(b) Choose variables of interest */
+proc sql;
+    create table select_data as
+    select CaseID, weight_pop,
+        B3, 
+        ND2, 
+        B7_b, 
+        GH1, 
+        educ_4cat, 
+        ppethm
+    from public2022;
+run;
+```
+
+\(c\)
+
+``` sas
+proc export
+   data = select_data
+   outfile = "/home/u63646271/sasuser.v94/analysis_data.csv"
+   dbms = CSV;
+run;
+```
+
+\(d\)
+
+``` stata
+ import delimited "/Users/meredithwang/Downloads/analysis_data.csv"
+(encoding automatically selected: ISO-8859-1)
+(8 vars, 11,667 obs)
+```
+
+After I import the data into STATA, the data has 6 variables as we selected before and also 11668 observations which is also the same as the Cook book.
+
+\(e\)
+
+``` stata
+gen wealth_binary = (b3 == "Somewhat worse off" | b3 == "Much worse off")
+encode nd2, generate(nd2_num)
+label define nd2_label 1 "Much higher" 2 "Somewhat higher" 3 "About the same" 4 "Somewhat lower" 5 "Much lower"
+label values nd2_num nd2_label
+encode b7_b, generate(b7_b_num)
+label define b7_b_label 1 "Poor" 2 "Only fair" 3 "Good" 4 "Excellent"
+label values b7_b_num b7_b_label
+encode gh1, generate(gh1_num)
+label define gh1_label 1 "Own your home with a mortgage or loan" 2 "Own your home free and clear (without a mortgage or loan)" 3 "Pay rent" 4 "Neither own nor pay rent"
+label values gh1_num gh1_label
+encode educ_4cat, generate(educ_4cat_num)
+label define educ_4cat_label 1 "Less than a high school degree" 2 "High school degree or GED" 3 "Some college/technical or associates degree" 4 "Bachelor's degree or more"
+label values educ_4cat_num educ_4cat_label
+encode ppethm, generate(ppethm_num)
+label define ppethm_label 1 "White, Non-Hispanic" 2 "Black, Non-Hispanic" 3 "Other, Non-Hispanic" 4 "Hispanic" 5 "2+ Races, Non-Hispanic"
+label values ppethm_num ppethm_label
+```
+
+``` stata
+. svyset caseid [pw=weight_pop]
+. svy: logistic wealth_binary i.nd2_num i.b7_b_num i.gh1_num i.educ_4cat_num i.ppethm_num
+(running logistic on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata =      1                        Number of obs   =      11,667
+Number of PSUs   = 11,667                        Population size = 255,114,223
+                                                 Design df       =      11,666
+                                                 F(17, 11650)    =       57.42
+                                                 Prob > F        =      0.0000
+
+----------------------------------------------------------------------------------------------------------------------------
+                                                           |             Linearized
+                                             wealth_binary | Odds ratio   std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------------------------------------+----------------------------------------------------------------
+                                                   nd2_num |
+                                          Somewhat higher  |   1.074973   .0909575     0.85   0.393     .9106824    1.268903
+                                           About the same  |   .8474572   .1282401    -1.09   0.274     .6299379    1.140087
+                                           Somewhat lower  |   .9813484   .0540987    -0.34   0.733     .8808343    1.093332
+                                               Much lower  |   .8243532   .1579435    -1.01   0.313     .5662509    1.200101
+                                                           |
+                                                  b7_b_num |
+                                                Only fair  |   1.974776   .6917774     1.94   0.052      .993814    3.924013
+                                                     Good  |   3.953395   1.362284     3.99   0.000     2.011999    7.768062
+                                                Excellent  |   11.98335   4.130326     7.21   0.000     6.097651    23.55017
+                                                           |
+                                                   gh1_num |
+Own your home free and clear (without a mortgage or loan)  |   1.517157   .1572363     4.02   0.000     1.238237    1.858905
+                                                 Pay rent  |   1.422295   .1417282     3.54   0.000     1.169932    1.729094
+                                 Neither own nor pay rent  |   1.385568   .1436771     3.14   0.002     1.130715    1.697864
+                                                           |
+                                             educ_4cat_num |
+                                High school degree or GED  |   1.226953   .0770309     3.26   0.001     1.084881    1.387631
+              Some college/technical or associates degree  |   1.396686    .155816     2.99   0.003     1.122349     1.73808
+                                Bachelor's degree or more  |   1.162817    .061381     2.86   0.004     1.048516    1.289579
+                                                           |
+                                                ppethm_num |
+                                      Black, Non-Hispanic  |   .4458974   .0687591    -5.24   0.000     .3295815    .6032635
+                                      Other, Non-Hispanic  |   .7637862   .1143198    -1.80   0.072     .5695802    1.024209
+                                                 Hispanic  |    .635055   .1135432    -2.54   0.011     .4473082    .9016039
+                                   2+ Races, Non-Hispanic  |   .9073112   .1243138    -0.71   0.478     .6936145    1.186846
+                                                           |
+                                                     _cons |    .076848   .0289352    -6.81   0.000     .0367368    .1607549
+----------------------------------------------------------------------------------------------------------------------------
+Note: _cons estimates baseline odds.
+```
+
+Based on the result above, we can find that none of the categorical of predictor 'nd2_num' has p-value less than 0.05, which gives us that none of the categories of the predictorare significantly different from the reference category in terms of predicting financial situation relative to the previous year.
+
+\(f\)
+
+``` stata
+.save "/Users/meredithwang/Desktop/Course/STAT506/Umich_stats506/analysis_data2.dta"
+```
+
+\(g\)
+
+```{r}
+public_2022 <- read_dta("/Users/meredithwang/Desktop/Course/STAT506/Umich_stats506/analysis_data2.dta")
+names(public_2022)
+```
+
+```{r}
+des <- svydesign(id = ~caseid, weights = ~weight_pop, data = public_2022)
+```
+
+```{r}
+model <- svyglm(wealth_binary ~ factor(nd2_num) + factor(b7_b_num) + factor(gh1_num) + 
+                factor(educ_4cat_num) + factor(ppethm_num), 
+                design = des, family = quasibinomial())
+```
+
+```{r}
+pseudo_R2 <- 1 - (model$deviance / model$null.deviance)
+print(pseudo_R2)
+```
+
+The pseudo R\^2 provides a measure of how well the predictors explain the variability in the response variable. Since this R\^2 is low in this case, we don't consider it as a good fit for this model.

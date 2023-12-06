@@ -1,0 +1,254 @@
+---
+title: "STAT506_HW5"
+format: html
+editor: visual
+---
+
+```{r}
+library("dplyr")
+library("ggplot2")
+library("tidyr")
+```
+
+## Question1
+
+\(a\)
+
+```{r}
+nnmaps <- read.csv("/Users/meredithwang/Downloads/chicago-nmmaps (1).csv")
+```
+
+```{r}
+#Calculate temperature in Celsius first
+nnmaps <- nnmaps %>%
+  mutate(temp_celsius = (temp - 32) * 5/9)
+
+# Calculate the mean temperature for each month and season
+monthly_avg_temp <- nnmaps %>%
+  group_by(month_numeric,season) %>%
+  summarize(mean_temp = mean(temp_celsius, na.rm = TRUE))%>%ungroup()
+
+monthly_avg_temp$month_numeric <- factor(monthly_avg_temp$month_numeric, levels = 1:12)
+monthly_avg_temp$season <- factor(monthly_avg_temp$season, levels = c("Winter", "Spring", "Summer", "Fall"))
+
+# Create the scatter plot
+ggplot(monthly_avg_temp, aes(x = month_numeric, y = mean_temp, group = season, color = season)) +
+  geom_point() +
+  geom_line() +
+  scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")) +
+  scale_color_manual(values = c("Winter" = "green", "Spring" = "orange", "Summer" = "red", "Fall" = "blue")) +
+  labs(title = "Mean Monthly Celsius Temperature Per Season",
+       x = "Month",
+       y = "Average Monthly Temperature",
+       color = "Season") 
+  
+```
+
+```{r}
+# Calculate the mean monthly values for each variable
+monthly_means <- nnmaps %>%
+  group_by(month_numeric) %>%
+  summarize(
+    mean_temp_celsius = mean(temp_celsius, na.rm = TRUE),
+    mean_o3 = mean(o3, na.rm = TRUE),
+    mean_pm10 = mean(pm10, na.rm = TRUE),
+    mean_dewpoint = mean(dewpoint, na.rm = TRUE)
+  )
+
+monthly_means$month_numeric <- factor(monthly_means$month_numeric, levels = 1:12)
+
+monthly_means_pivot <- pivot_longer(monthly_means, 
+                                   cols = c(mean_temp_celsius, mean_o3, mean_pm10,
+                                            mean_dewpoint),
+                                   names_to = "variable",
+                                   values_to = "value")
+
+# Revised ggplot code
+ggplot(monthly_means_pivot, aes(x = month_numeric, y = value, color = variable, group = variable)) +
+  geom_point() +
+  geom_line() +
+  scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")) +
+  scale_color_manual(values = c("mean_temp_celsius" = "red", "mean_o3" = "blue", "mean_pm10" = "green", "mean_dewpoint" = "purple")) +
+  labs(title = "Mean Monthly Temperature, O3, PM10, and Dewpoint",
+       x = "Month",
+       y = "Value",
+       color = "Variable") +
+  theme_minimal()
+```
+
+Since PM10 has a more stable curve with the months changing, it has less impact of seasonal changes.
+
+## Question2
+
+\(a\)
+
+```{r}
+# Define the poly class
+setClass("poly", 
+         representation(coefficients = "numeric", powers = "numeric"),
+         validity = function(object) {
+           if (length(object@coefficients) != length(object@powers)) {
+             stop("Coefficients and exponents should have the same length", call. = FALSE)
+  }
+           if (any(object@powers < 0)) {
+             stop("Exponents must be non-negative", call. = FALSE)
+  }
+           TRUE
+}
+)
+
+# Constructor function
+make_poly <- function(polyString) {
+  polyString <- gsub(" ", "", polyString)
+  
+  # Split the expression into terms
+  terms <- unlist(regmatches(polyString, gregexpr("[-+]?[^-+]+", polyString)))
+  
+  coefficients <- numeric()
+  powers <- numeric()
+
+  # Parse each term and extract coefficients and powers
+  for (term in terms) {
+    if (grepl("x", term)) {
+      if (grepl("x\\^", term)) {
+        parts <- strsplit(term, "x\\^")[[1]]
+        coeff <- ifelse(parts[1] == "" || parts[1] == "-", paste0(parts[1], "1"), parts[1])
+        power <- parts[2]
+      } else {
+        coeff <- ifelse(grepl("^-x", term) || term == "x", ifelse(term == "x", "1", "-1"), term)
+        power <- "1"
+      }
+    } else {
+      coeff <- term
+      power <- "0"
+    }
+    coefficients <- c(coefficients, as.numeric(coeff))
+    powers <- c(powers, as.numeric(power))
+  }
+
+  # Create a new poly object with coefficients and powers
+  new("poly", coefficients = coefficients, powers = powers)
+}
+
+```
+
+```{r}
+setMethod("show", "poly", function(object) {
+  terms_str <- sapply(seq_along(object@coefficients), function(i) {
+    coef <- object@coefficients[i]
+    exp <- object@powers[i]
+
+    if (is.na(coef) || coef == 0) return("")
+
+    if (exp == 0) {
+      return(as.character(coef))
+    } else if (exp == 1) {
+      return(paste0(coef, "x"))
+    } else {
+      return(paste0(coef, "x^", exp))
+    }
+  })
+
+  # Combine terms into a single string
+  polynomial_str <- paste(na.omit(terms_str), collapse = " + ")
+  cat(polynomial_str, "\n")
+})
+
+# Addition
+setMethod("+", c("poly", "poly"), function(e1, e2) {
+  all_powers <- sort(unique(c(e1@powers, e2@powers)), decreasing = TRUE)
+  result_coefficients <- numeric(length(all_powers))
+
+  for (exp in all_powers) {
+    coef1 <- ifelse(exp %in% e1@powers, e1@coefficients[e1@powers == exp], 0)
+    coef2 <- ifelse(exp %in% e2@powers, e2@coefficients[e2@powers == exp], 0)
+    result_coefficients[all_powers == exp] <- coef1 + coef2
+  }
+
+  new("poly", coefficients = result_coefficients, powers = all_powers)
+})
+
+# Subtraction
+setMethod("-", c("poly", "poly"), function(e1, e2) {
+  all_powers <- sort(unique(c(e1@powers, e2@powers)), decreasing = TRUE)
+  result_coefficients <- numeric(length(all_powers))
+
+  for (exp in all_powers) {
+    coef1 <- ifelse(exp %in% e1@powers, e1@coefficients[e1@powers == exp], 0)
+    coef2 <- ifelse(exp %in% e2@powers, e2@coefficients[e2@powers == exp], 0)
+    result_coefficients[all_powers == exp] <- coef1 - coef2
+  }
+
+  new("poly", coefficients = result_coefficients, powers = all_powers)
+})
+
+```
+
+\(b\)
+
+```{r}
+p1 <- make_poly("3x^2 + 2")
+p2 <- make_poly("7x^3 - 2x^2 - x + 17")
+p1
+p2
+p1 + p2
+p1 - p2
+```
+
+## Question3
+
+\(1\)
+
+```{r}
+library("nycflights13")
+library("data.table")
+```
+
+```{r}
+flights <- as.data.table(flights)
+airports <- as.data.table(airports)
+```
+
+```{r}
+
+dep_delay_table <- flights[, .(mean_dep_delay = mean(dep_delay, na.rm = TRUE),
+                               median_dep_delay = median(dep_delay, na.rm = TRUE),
+                               flight_count = .N), by = .(origin)
+                         ][flight_count >= 10
+                         ][order(-mean_dep_delay)]
+
+dep_delay_table <- dep_delay_table[airports, on = .(origin = faa), nomatch = 0][, .(airport_name = name, mean_dep_delay, median_dep_delay)]
+
+print(dep_delay_table)
+```
+
+```{r}
+arr_delay <- flights[, .(arr_delay_mean = mean(arr_delay, na.rm = TRUE),
+                         arr_delay_median = median(arr_delay, na.rm = TRUE),
+                         flight_count = .N), by = .(dest)
+                     ][flight_count >= 10]
+
+arr_delay <- arr_delay[airports, on = .(dest = faa), nomatch = 0]
+
+arr_delay <- arr_delay[order(-arr_delay_mean), .(dest = name, arr_delay_mean, arr_delay_median)]
+
+# Print the table with all rows
+print(arr_delay, n = Inf)
+```
+
+\(b\)
+
+```{r}
+flights_dt <- as.data.table(flights)
+planes_dt <- as.data.table(planes)
+average_speed <- flights_dt[planes_dt, on = .(tailnum = tailnum), nomatch = 0]
+
+average_speed <- average_speed[, speed := distance / (air_time / 60)]
+average_speed <- average_speed[, .(avg_speed = mean(speed, na.rm = TRUE),
+                                   num_flights = .N), by = .(model)]
+average_speed <- average_speed[order(-avg_speed)][1]
+
+average_speed
+```
+
+(\

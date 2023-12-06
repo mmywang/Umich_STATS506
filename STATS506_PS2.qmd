@@ -1,0 +1,258 @@
+---
+title: "STATS506_PS2"
+format: html
+editor: visual
+---
+
+```{r}
+library(microbenchmark)
+library(dplyr)
+library(ggplot2)
+```
+
+Question1
+
+\(a\)
+
+```{r}
+play_dice1 <- function(n) {
+  total <- 0
+  for (i in 1:n) {
+    roll <- sample(1:6, 1)
+    if (roll %% 2 == 0) total <- total + roll -2
+    else total <- total - 2
+  }
+  return(total)
+}
+
+```
+
+\(b\)
+
+```{r}
+play_dice2 <- function(n){
+  roll <- sample(1:6, n, replace = TRUE)
+  win <- sum(roll[roll %% 2 == 0])+length(roll[roll %% 2 == 0]) * (-2)
+  lose <- length(roll[roll %% 2 != 0]) * (-2)
+  return(win + lose)
+}
+
+```
+
+\(c\)
+
+```{r}
+play_dice3 <- function(n){
+  roll <- sample(1:6, n, replace = TRUE)
+  roll_to_factor <- factor(roll, levels = 1:6)
+  roll_table <- table(roll_to_factor)
+  win <- sum((1:6)[(1:6) %% 2 == 0]*roll_table[(1:6) %% 2 == 0])+sum(roll_table[(1:6) %% 2 == 0])*(-2)
+  lose <- sum(roll_table[(1:6) %% 2 != 0])*(-2)
+  return(win+lose)            
+}
+```
+
+\(d\)
+
+```{r}
+play_dice4 <- function(n){
+  one_roll <- function(x){
+    roll<-sample(1:6,1)
+    if (roll%%2==0){
+      return(roll-2)
+    } else(
+      return(-2)
+    )
+  }
+  total <- sum(sapply(1:n,one_roll))
+  return(total)
+}
+```
+
+b\.
+
+```{r}
+cat("play_dice1 with input 3 ", play_dice1(3), "\n")
+cat("play_dice1 with input 3000 ", play_dice1(3000), "\n")
+```
+
+```{r}
+cat("play_dice2 with input 3 ", play_dice2(3), "\n")
+cat("play_dice2 with input 3000 ", play_dice2(3000), "\n")
+```
+
+```{r}
+cat("play_dice3 with input 3 ", play_dice3(3), "\n")
+cat("play_dice3 with input 3000 ", play_dice3(3000), "\n")
+```
+
+```{r}
+cat("play_dice4 with input 3 ", play_dice4(3), "\n")
+cat("play_dice4 with input 3000 ", play_dice4(3000), "\n")
+```
+
+As shown above, all the methods can run with the input 3 and 3000. Every time we run the chunk, the result will be in the range.
+
+c\.
+
+```{r}
+set.seed(123)
+result1 <- play_dice1(3)
+
+set.seed(123)
+result2 <- play_dice2(3)
+
+set.seed(123)
+result3 <- play_dice3(3)
+
+set.seed(123)
+result4 <- play_dice4(3)
+
+cat("Results with input 3:\n")
+cat("play_dice1: ", result1, "\n")
+cat("play_dice2: ", result2, "\n")
+cat("play_dice3: ", result3, "\n")
+cat("play_dice4: ", result4, "\n\n")
+
+# Repeat the same process with input 3000
+set.seed(123)
+result1 <- play_dice1(3000)
+
+set.seed(123)
+result2 <- play_dice2(3000)
+
+set.seed(123)
+result3 <- play_dice3(3000)
+
+set.seed(123)
+result4 <- play_dice4(3000)
+
+cat("Results with input 3000:\n")
+cat("play_dice1: ", result1, "\n")
+cat("play_dice2: ", result2, "\n")
+cat("play_dice3: ", result3, "\n")
+cat("play_dice4: ", result4, "\n")
+
+```
+
+In this question, 'set.seed(123)' is used to control the random dice rolls simulated by the sample function. Since all functions above use the sample function and we use the same set.seed(), all the results are the same.
+
+d\.
+
+```{r}
+micro_low <- microbenchmark(
+  play_dice1(100),
+  play_dice2(100),
+  play_dice3(100),
+  play_dice4(100),
+  times = 100L
+)
+micro_large <- microbenchmark(
+  play_dice1(10000),
+  play_dice2(10000),
+  play_dice3(10000),
+  play_dice4(10000),
+  times = 100L
+)
+```
+
+```{r}
+micro_low
+micro_large
+```
+
+e\.
+
+```{r}
+set.seed(123)
+n_simulations <- 10^6
+results <- play_dice1(n_simulations)
+average_result <- results / n_simulations
+cat("Average Result per Game: ", average_result, "\n")
+```
+
+Monte Carlo can be used to simulate a large number of games by observing the average result. Since the average result using Monte Carlo is close to the expected value for the game which is 0, we can consider this game is fair.
+
+Question2
+
+1\. import the dataset
+
+```{r}
+data <- read.csv('cars.csv')
+head(data)
+colnames(data)
+```
+
+```{r}
+new_columnName <- c('Height', 'Length', 'Width', 'Driveline', 'Engine_type','Engine_hybrid','Forward_gears_num', 'Transmission','City_mpg','Fuel_type', 'Highway_mpg','Classification','ID','Make','Model_year','Year','Horsepower','Torque')
+colnames(data) <- new_columnName
+colnames(data)
+```
+
+2\.
+
+```{r}
+gasoline_cars <- filter(data, Fuel_type == 'Gasoline')
+```
+
+3\.
+
+```{r}
+gasoline_cars$Year <- as.factor(gasoline_cars$Year)
+model <- lm(Highway_mpg ~ Horsepower + Torque + Length + Width + Height + Year, data = gasoline_cars)
+summary(model)
+```
+
+We can see that the p-value for Horsepower is less than 0.05, which gives us that there's sufficient evidence to suggest that the relationship between horsepower and MPG is statistically significant. Also, the coefficient gives us that with all others constant, i unit increase in Horsepower will lead to 0.0164 increase unit Highway_mpg.
+
+4\.
+
+```{r}
+gasoline_cars$Year <- as.factor(gasoline_cars$Year)
+model2 <- lm(Highway_mpg ~ Horsepower*Torque + Length + Width + Height + Year, data = gasoline_cars)
+```
+
+```{r}
+set.seed(123)
+gasoline_cars$Year <- as.factor(gasoline_cars$Year)
+torque_values <- c(200,250,300)
+new_data <- expand.grid(
+  Horsepower = seq(min(gasoline_cars$Horsepower), max(gasoline_cars$Horsepower), length.out = 100), 
+  Torque = torque_values, 
+  Length = mean(gasoline_cars$Length), 
+  Width = mean(gasoline_cars$Width),
+  Height = mean(gasoline_cars$Height),
+  Year = levels(gasoline_cars$Year)[1] 
+)
+new_data$predicted_mpg <- predict(model2, newdata = new_data)
+ggplot(new_data, aes(x = Horsepower, y = predicted_mpg, color = as.factor(Torque))) +
+   geom_line() +
+   labs(color = "Torque") +
+   ggtitle("Interaction Plot: Horsepower and Torque") +
+   xlab("Horsepower") +
+   ylab("Predicted MPG")
+```
+
+e\.
+
+```{r}
+data$Year <- as.factor(data$Year)
+X <- model.matrix(Highway_mpg ~ Horsepower + Torque + Length + Width + Height + Year, data = data)
+Y <- data$Highway_mpg
+beta_hat <- solve(t(X) %*% X) %*% t(X) %*% Y
+print(beta_hat)
+```
+
+```{r}
+# Fit the model using lm()
+data$Year <- as.factor(data$Year)
+model <- lm(City_mpg ~ Horsepower + Torque + Length + Width + Height + Year, data = data)
+
+# Extract coefficients from the lm model
+lm_beta <- coef(model)
+
+# Print the coefficients from lm() model
+print(lm_beta)
+```
+
+We can see that the results from both methods are matched.

@@ -1,0 +1,330 @@
+---
+title: "STAT506_project"
+format: html
+editor: visual
+---
+
+```{r}
+install.packages(c("ggplot2", "sf", "maps", "dplyr"))
+install.packages(c("glmnet","lme4"))
+install.packages("Matrix")
+```
+
+```{r}
+library(ggplot2)
+library(sf)
+library(maps)
+library(dplyr)
+library(glmnet)
+library(lme4)
+library(Matrix)
+```
+
+## Import Data
+
+### Election Data
+
+```{r}
+df_governors <- read.csv('/Users/meredithwang/Downloads/governors_county_candidate.csv')
+df_president <- read.csv('/Users/meredithwang/Downloads/president_county_candidate.csv')
+df_senate <- read.csv('/Users/meredithwang/Downloads/senate_county_candidate.csv')
+print(paste("The number of governors is ",nrow(df_governors), ". The number of feature for governors is", ncol(df_governors)))
+print(paste("The number of president is ",nrow(df_president), ". The number of feature for president is", ncol(df_president)))
+print(paste("The number of senate is ",nrow(df_senate), ". The number of feature for senate is", ncol(df_senate)))
+```
+
+```{r}
+head(df_president)
+```
+
+```{r}
+#Separate dataframe into REP and DEM
+df_president_agg_REP <- df_president[df_president$party == "REP",]
+df_president_agg_DEM <- df_president[df_president$party == "DEM",]
+
+#Group total votes by state and county
+df_president_agg_REP <- df_president_agg_REP %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+df_president_agg_DEM <- df_president_agg_DEM %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+
+#Rename the columns
+names(df_president_agg_REP)[names(df_president_agg_REP) == "total_votes"] <- "votes_REP_president"
+names(df_president_agg_DEM)[names(df_president_agg_DEM) == "total_votes"] <- "votes_DEM_president"
+
+#Merge tables
+df_president_agg <- merge(df_president_agg_REP,df_president_agg_DEM, by = c("state", "county"), all.x = TRUE)
+df_president_agg
+```
+
+```{r}
+#Separate dataframe into REP and DEM
+df_senate_agg_REP <- df_president[df_president$party == "REP",]
+df_senate_agg_DEM <- df_president[df_president$party == "DEM",]
+
+#Group total votes by state and county
+df_senate_agg_REP <- df_senate_agg_REP %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+df_senate_agg_DEM <- df_senate_agg_DEM %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+
+#Rename the columns
+names(df_senate_agg_REP)[names(df_senate_agg_REP) == "total_votes"] <- "votes_REP_senate"
+names(df_senate_agg_DEM)[names(df_senate_agg_DEM) == "total_votes"] <- "votes_DEM_senate"
+
+#Merge tables
+df_senate_agg <- merge(df_senate_agg_REP, df_senate_agg_DEM, by = c("state", "county"), all.x = TRUE)
+df_senate_agg
+```
+
+```{r}
+#Separate dataframe into REP and DEM
+df_governors_agg_REP <- df_president[df_president$party == "REP",]
+df_governors_agg_DEM <- df_president[df_president$party == "DEM",]
+
+#Group total votes by state and county
+df_governors_agg_REP <- df_governors_agg_REP %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+df_governors_agg_DEM <- df_governors_agg_DEM %>%
+  group_by(state, county) %>%
+  summarise(total_votes = sum(total_votes, na.rm = TRUE), .groups = 'drop')
+
+#Rename the columns
+names(df_governors_agg_REP)[names(df_governors_agg_REP) == "total_votes"] <- "votes_REP_governor"
+names(df_governors_agg_DEM)[names(df_governors_agg_DEM) == "total_votes"] <- "votes_DEM_governor"
+
+#Merge tables
+df_governors_agg <- merge(df_governors_agg_REP, df_governors_agg_DEM, by = c("state", "county"), all.x = TRUE)
+df_governors_agg
+```
+
+```{r}
+# Merge df_president_agg and df_senate_agg
+df <- merge(df_president_agg, df_senate_agg, by = c("state", "county"), all.x = TRUE)
+
+# Merge the result with df_governors_agg
+df <- merge(df, df_governors_agg, by = c("state", "county"), all.x = TRUE)
+
+df
+```
+
+```{r}
+# Replace NA values with 0
+df[is.na(df)] <- 0
+
+# Display the first 5 rows
+head(df, 5)
+```
+
+### Demographic Data
+
+```{r}
+df_census <- read.csv('/Users/meredithwang/Downloads/acs2017_county_data.csv')
+names(df_census)[names(df_census) == "State"] <- "state"
+names(df_census)[names(df_census) == "County"] <- "county"
+head(df_census)
+```
+
+```{r}
+vars_to_merge <- c('Income','IncomeErr','IncomePerCap','IncomePerCapErr')
+df_census_agg <- df_census %>%
+  group_by(state, county) %>%
+  summarise(across(all_of(vars_to_merge), sum, na.rm = TRUE), .groups = 'drop')
+df_census_agg
+```
+
+```{r}
+df <- merge(df, df_census_agg, by = c("state", "county"), all.x = TRUE)
+```
+
+#### Data Cleaning
+
+```{r}
+sum(is.na(df$IncomePerCap))
+sum(is.na(df$votes_REP_president_perc))
+sum(is.na(df$votes_DEM_president_perc))
+```
+
+```{r}
+# Calculate the percentage of missing values
+missing_percentage <- sum(is.na(df)) / prod(dim(df)) * 100
+
+# Print the result
+cat("The number of missing entries before cleaning:", round(missing_percentage, 5), "%\n")
+```
+
+```{r}
+# Calculating Vote Percentages
+df$votes_REP_president_perc <- df$votes_REP_president / (df$votes_REP_president + df$votes_DEM_president)
+df$votes_DEM_president_perc <- df$votes_DEM_president / (df$votes_REP_president + df$votes_DEM_president)
+df$votes_REP_senate_perc <- df$votes_REP_senate / (df$votes_REP_senate + df$votes_DEM_senate)
+df$votes_DEM_senate_perc <- df$votes_DEM_senate / (df$votes_REP_senate + df$votes_DEM_senate)
+df$votes_REP_governors_perc <- df$votes_REP_governor / (df$votes_REP_governor + df$votes_DEM_governor)
+df$votes_DEM_governors_perc <- df$votes_DEM_governor / (df$votes_REP_governor + df$votes_DEM_governor)
+```
+
+```{r}
+#Identifying Columns
+votes_perc <- names(df)[ncol(df)-5:ncol(df)]
+votes <- setdiff(names(df), names(df_census_agg))
+factors <- setdiff(names(df), votes)
+```
+
+```{r}
+#Filling Missing value
+df[is.na(df)] <- 0
+```
+
+```{r}
+missing_percentage <- sum(is.na(df)) / prod(dim(df)) * 100
+cat("The number of missing entries after cleaning:", round(missing_percentage, 5), "%\n")
+```
+
+```{r}
+print(paste("The number of rows is",nrow(df), ". The number of feature is", ncol(df)))
+```
+
+#### EDA
+
+```{r}
+head(df)
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+ggplot(df, aes(x = IncomePerCap)) +
+    geom_histogram(bins = 30, fill = "blue", alpha = 0.7) +
+    labs(title = "Histogram of Individual Income", x = "Income Per Capita", y = "Frequency")
+
+ggplot(df, aes(x = IncomePerCap, y = votes_REP_president_perc)) +
+    geom_point(alpha = 0.6, color = "red") +
+    labs(title = "Income vs. Republican Voting Percentage", x = "Income Per Capita", y = "Republican Vote Percentage")
+
+ggplot(df, aes(x = IncomePerCap, y = votes_DEM_president_perc)) +
+    geom_point(alpha = 0.6, color = "blue") +
+    labs(title = "Income vs. Democrat Voting Percentage", x = "Income Per Capita", y = "Democrat Vote Percentage")
+```
+
+```{r}
+states_map <- st_as_sf(map("state", plot = FALSE, fill = TRUE))
+state_level_data <- df %>%
+    group_by(state) %>%
+    summarise(RepublicanVotes = mean(votes_REP_president_perc, na.rm = TRUE),
+              DemocratVotes = mean(votes_DEM_president_perc, na.rm = TRUE),
+              Income_mean = mean(IncomePerCap,na.rm = TRUE))
+state_level_data$state <- tolower(state_level_data$state)
+merged_data <- merge(states_map, state_level_data, by.x = "ID", by.y = "state")
+```
+
+```{r}
+ggplot(state_level_data, aes(x = Income_mean, y = RepublicanVotes)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Income vs. Republican Voting Percentage by State",
+       x = "Average Income", y = "Republican Vote Percentage")
+
+```
+
+```{r}
+ggplot(merged_data) +
+    geom_sf(aes(fill = RepublicanVotes)) +
+    scale_fill_gradient(low = "white", high = "red") +
+    labs(title = "Republican Voting Percentage by State") +
+    theme_minimal()
+ggplot(merged_data) +
+    geom_sf(aes(fill = DemocratVotes)) +
+    scale_fill_gradient(low = "white", high = "blue") +
+    labs(title = "Democrat Voting Percentage by State") +
+    theme_minimal()
+```
+
+```{r}
+
+create_map_with_income <- function(data, voting_column, title, fill_gradient_low, fill_gradient_high) {
+  # Create the choropleth map
+  map <- ggplot(data) +
+    geom_sf(aes(fill = get(voting_column)), color = NA) +
+    scale_fill_gradient(low = fill_gradient_low, high = fill_gradient_high, name = "Vote %") +
+    labs(title = title) +
+    theme_minimal()
+
+  # Add income labels to each state
+  map <- map + geom_sf_text(aes(label = round(Income_mean, 0)), size = 3, check_overlap = TRUE)
+  
+  return(map)
+}
+
+# Create maps
+republican_map <- create_map_with_income(merged_data, "RepublicanVotes",
+                                         "Republican Voting Percentage with Income by State",
+                                         "white", "red")
+
+democrat_map <- create_map_with_income(merged_data, "DemocratVotes",
+                                       "Democrat Voting Percentage with Income by State",
+                                       "white", "blue")
+
+# Plot the maps
+plot(republican_map)
+plot(democrat_map)
+
+```
+
+```{r}
+#Next, we want to explor the correlation between Income and president votes
+
+# Calculate the correlation between Republican votes and IncomePerCap
+cor_REP_Income <- cor(df$votes_REP_president_perc, df$IncomePerCap, use = "complete.obs")
+
+# Calculate the correlation between Democrat votes and IncomePerCap
+cor_DEM_Income <- cor(df$votes_DEM_president_perc, df$IncomePerCap, use = "complete.obs")
+
+# Print the correlations
+print(paste("Correlation between REP votes and Income:", cor_REP_Income))
+print(paste("Correlation between DEM votes and Income:", cor_DEM_Income))
+
+```
+
+### Modeling
+
+```{r}
+state_level_data <- df %>%
+    group_by(state) %>%
+    summarise(RepublicanVotes = mean(votes_REP_president_perc, na.rm = TRUE),
+              DemocratVotes = mean(votes_DEM_president_perc, na.rm = TRUE),
+              Income_mean = mean(IncomePerCap,na.rm = TRUE))
+# Correlation Analysis
+cor(state_level_data$Income_mean, state_level_data$RepublicanVotes, use = "complete.obs")
+cor(state_level_data$Income_mean, state_level_data$DemocratVotes, use = "complete.obs")
+
+# Regression Analysis by State (example for one state)
+state_specific_df <- subset(df, state == "Michigan")
+lm_state <- lm(votes_REP_president_perc ~ IncomePerCap, data = state_specific_df)
+summary(lm_state)
+
+```
+
+```{r}
+df$state <- as.factor(df$state)
+# Model for Republican Votes
+model_REP <- lm(votes_REP_president_perc ~ IncomePerCap * state, data = df)
+
+# Model for Democrat Votes
+model_DEM <- lm(votes_DEM_president_perc ~ IncomePerCap * state, data = df)
+summary(model_REP)
+```
+
+```{r}
+df$state <- as.factor(df$state)
+df$IncomePerCap_scaled <- scale(df$IncomePerCap)
+# Fit the model with random slopes for the income variable by state
+model <- lmer(votes_REP_president_perc ~ IncomePerCap_scaled + (1 + IncomePerCap_scaled|state), data = df)
+summary(model)
+```

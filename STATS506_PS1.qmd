@@ -1,0 +1,414 @@
+---
+title: "STATS506 PS1"
+format: html
+---
+
+## Problem 1
+
+
+Github Link: https://github.com/mmmeredithw/STATS506.git
+
+```{r}
+library(dplyr)
+
+# Read the "wine.names" file
+wine.names <- readLines("wine.names")
+
+# Read the wine.data file
+wine.data <- read.table("wine.data", header = FALSE, sep = ",")
+
+#Trim column names in wine.names
+wine.columns <- wine.names[58:70]
+columns_names <- gsub("^\\s*\\d+\\)\\s*", "", wine.columns)
+columns_names <- gsub("\\s+$", "", columns_names)
+
+#Use information in “wine.names” to give appropriate column names
+colnames(wine.data)[2:ncol(wine.data)] <- columns_names
+colnames(wine.data)[1] <- c("Class")
+
+#Display data for the first five rows
+wine.data[0:5,]
+```
+
+\(b\) Check class number
+
+```{r}
+#The actual count
+class_counts <- table(wine.data$Class)
+class_counts
+
+#The information in wine.names
+class_check <- wine.names[98:100]
+class_check <- gsub("^\\s*\\d+\\)\\s*", "", class_check)
+
+class_check[]
+```
+
+After check, they remain the same as the information in wine.names
+
+\(c\)
+
+```{r}
+sorted_data <- wine.data[order(wine.data$Alcohol, decreasing = TRUE), ]
+highest_alcohol_wine_class <- sorted_data$Class[1]
+cat("The wine with the highest alcohol content belongs to Class:", highest_alcohol_wine_class, "\n")
+```
+
+```{r}
+sorted_data1 <- wine.data[order(wine.data$Alcohol, decreasing = FALSE), ]
+lowest_alcohol_wine_class <- sorted_data1$Class[1]
+cat("The wine with the lowest alcohol content belongs to Class:", lowest_alcohol_wine_class, "\n")
+```
+
+```{r}
+german_beer_avg_magnesium <- 114
+subset_data <- subset(wine.data,Magnesium > german_beer_avg_magnesium)
+num_records <- nrow(subset_data)
+cat("The number of wines who have higher levels of magnesium than German beer", num_records, "\n")
+```
+
+```{r}
+german_beer_avg_magnesium <- 114
+wine.data %>%
+  group_by(Class) %>%
+  summarize(Count = sum(Magnesium > german_beer_avg_magnesium))
+```
+
+\(d\)
+
+```{r}
+# Calculate overall averages
+overall_avg <- wine.data %>%
+  summarise(across(everything(),mean, na.rm = TRUE))
+
+# Calculate class-specific averages
+class_avg <- wine.data %>%
+  group_by(Class) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
+
+result <- rbind(overall_avg,class_avg)
+result
+```
+
+\(e\)
+
+```{r}
+# Split the data by class
+class_1 <- wine.data$Ash[wine.data$Class == 1]
+class_2 <- wine.data$Ash[wine.data$Class == 2]
+class_3 <- wine.data$Ash[wine.data$Class == 3]
+
+# Perform t-tests
+t_test_1_vs_2 <- t.test(class_1, class_2)
+t_test_1_vs_3 <- t.test(class_1, class_3)
+t_test_2_vs_3 <- t.test(class_2, class_3)
+
+# Print the results
+cat("T-test results for Class 1 vs. Class 2:\n")
+print(t_test_1_vs_2)
+
+cat("\nT-test results for Class 1 vs. Class 3:\n")
+print(t_test_1_vs_3)
+
+cat("\nT-test results for Class 2 vs. Class 3:\n")
+print(t_test_2_vs_3)
+```
+
+1.  For class1 and class2, since p-value is less than 0.05, we reject the null hypothesis that the population means of these two groups are equal.
+2.  For class1 and class3, since p-value is greater than 0.05, we refuse to reject the null hypothesis that the population means of these two groups are equal.
+3.  For class2 and class3, since p-value is less than 0.05, we reject the null hypothesis that the population means of these two groups are equal.
+
+## Problem 2
+
+```{r}
+isPerfectPower <- function(n, power) {
+  
+  #Check whether power greater than 2, if not return False and null root
+    if (power < 2) {
+    return(list(isPerfect = FALSE, root = NULL))
+    }
+  
+  #Use for loop 
+  for (root in 2:(n ^ (1 / power))) {
+    result <- root^power
+    if (result == n) {
+      return(list(isPerfect = TRUE, root = root))
+    } else if (result > n) {
+      break
+    }
+  }
+  return(list(isPerfect = FALSE, root = NULL))
+}
+
+#Check with example
+isPerfectPower(27, power = 3)
+```
+
+```{r}
+findRootPower <- function(number) {
+  #Starting from p = 2
+  power <- 2
+  #Use a while loop
+  while (power <= log2(number)) {
+    root <- round(number^(1/power))
+    result <- root^power
+    if (result == number) {
+      return(paste(root, "^", power, " = ", number))
+    }
+    power <- power + 1
+  }
+  return(paste(number, "is not a perfect power."))
+}
+```
+
+```{r}
+findRootPower(27)
+findRootPower(13060694016)
+findRootPower(7776)
+findRootPower(170859375)
+findRootPower(58247422)
+findRootPower(94143178827)
+```
+
+## Problem 3
+
+\(a\)
+
+```{r}
+# Function to identify the name of a poker hand
+identifyPokerHand <- function(suits, ranks) {
+  possible_hands <- c("High Card", "One Pair", "Two Pairs", "Three of a Kind", 
+                      "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush", "Royal Flush")
+  
+  rank_counts <- table(ranks)
+  
+  is_flush <- length(unique(suits)) == 1
+  
+  is_straight <- length(rank_counts) == 5 && (max(ranks) - min(ranks) == 4)
+  
+  pair_count <- sum(rank_counts == 2)
+  three_of_a_kind_count <- sum(rank_counts == 3)
+  four_of_a_kind_count <- sum(rank_counts == 4)
+  
+  if (is_flush && is_straight) {
+    if (max(ranks) == 14) {
+      return("Royal Flush")
+    } else {
+      return("Straight Flush")
+    }
+  } else if (four_of_a_kind_count == 1) {
+    return("Four of a Kind")
+  } else if (three_of_a_kind_count == 1 && pair_count == 1) {
+    return("Full House")
+  } else if (is_flush) {
+    return("Flush")
+  } else if (is_straight) {
+    return("Straight")
+  } else if (three_of_a_kind_count == 1) {
+    return("Three of a Kind")
+  } else if (pair_count == 2) {
+    return("Two Pairs")
+  } else if (pair_count == 1) {
+    return("One Pair")
+  } else {
+    return("High Card")
+  }
+}
+
+# Function to deal a round of poker hands
+dealPokerHands <- function(num_players) {
+  suits <- c("Hearts", "Diamonds", "Clubs", "Spades")
+  ranks <- c(2:10, "Jack", "Queen", "King", "Ace")
+  
+  deck <- expand.grid(rank = ranks, suit = suits)
+  
+  set.seed(123) # for reproducibility
+  shuffled_deck <- deck[sample(nrow(deck)), ]
+  
+  hands <- split(shuffled_deck, 1:num_players)
+  
+  for (i in 1:num_players) {
+    player_hand <- hands[[i]]
+    player_suits <- player_hand$suit
+    player_ranks <- player_hand$rank
+    hand_name <- identifyPokerHand(player_suits, player_ranks)
+    
+    cat("Player", i, "Hand:", paste(player_ranks, player_suits), "- Hand Name:", hand_name, "\n")
+  }
+}
+```
+
+
+\(b\)
+
+There's an issue should be fixed: the function above can't identify the "Ace" as rank 14 correctly for straight and straight flush when calculating the maximum rank.
+
+How to fix: Map "Ace" to rank 14
+
+```{r}
+# Function to identify the name of a poker hand
+identifyPokerHand <- function(suits, ranks) {
+  possible_hands <- c("High Card", "One Pair", "Two Pairs", "Three of a Kind", 
+                      "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush", "Royal Flush")
+  
+# Map "Ace" to rank 14 to fix the issue
+  ranks[ranks == "Ace"] <- 14
+  
+  rank_counts <- table(ranks)
+  
+  is_flush <- length(unique(suits)) == 1
+  
+  is_straight <- length(rank_counts) == 5 && (max(ranks) - min(ranks) == 4)
+  
+  pair_count <- sum(rank_counts == 2)
+  three_of_a_kind_count <- sum(rank_counts == 3)
+  four_of_a_kind_count <- sum(rank_counts == 4)
+  
+  if (is_flush && is_straight) {
+    if (max(ranks) == 14) {
+      return("Royal Flush")
+    } else {
+      return("Straight Flush")
+    }
+  } else if (four_of_a_kind_count == 1) {
+    return("Four of a Kind")
+  } else if (three_of_a_kind_count == 1 && pair_count == 1) {
+    return("Full House")
+  } else if (is_flush) {
+    return("Flush")
+  } else if (is_straight) {
+    return("Straight")
+  } else if (three_of_a_kind_count == 1) {
+    return("Three of a Kind")
+  } else if (pair_count == 2) {
+    return("Two Pairs")
+  } else if (pair_count == 1) {
+    return("One Pair")
+  } else {
+    return("High Card")
+  }
+}
+
+# Function to deal a round of poker hands
+dealPokerHands <- function(num_players) {
+  suits <- c("Hearts", "Diamonds", "Clubs", "Spades")
+  ranks <- c(2:10, "Jack", "Queen", "King", "Ace")
+  
+  deck <- expand.grid(rank = ranks, suit = suits)
+  
+  set.seed(123) 
+  shuffled_deck <- deck[sample(nrow(deck)), ]
+  
+  hands <- split(shuffled_deck, 1:num_players)
+  
+  for (i in 1:num_players) {
+    player_hand <- hands[[i]]
+    player_suits <- player_hand$suit
+    player_ranks <- player_hand$rank
+    hand_name <- identifyPokerHand(player_suits, player_ranks)
+    
+    cat("Player", i, "Hand:", paste(player_ranks, player_suits), "- Hand Name:", hand_name, "\n")
+  }
+}
+```
+
+\(c\)
+
+```{r}
+# Function to identify the name of a poker hand
+# Write the first function with input suits and ranks
+identifyPokerHand <- function(suits, ranks) {
+  # List all the possible hands and store it in possible_hands
+  possible_hands <- c("High Card", "One Pair", "Two Pairs", "Three of a Kind", 
+                      "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush", "Royal Flush")
+  
+  # Map "Ace" to rank 14 to fix the issue
+  ranks[ranks == "Ace"] <- 14
+  
+  # Calculate the frequency of each rank and store it in rank_counts
+  rank_counts <- table(ranks)
+  
+  #Check whether is flush by checking the length of distinct suits equals to 1
+  is_flush <- length(unique(suits)) == 1
+  
+  #Check whether is straight by checking whether both rank_counts equals to 5 and the range of ranks equals to 4 conditions are matched
+  is_straight <- length(rank_counts) == 5 && (max(ranks) - min(ranks) == 4)
+  
+  #Calculate pair_count by counting how many elements in the vector rank_counts are equal to 2.
+  pair_count <- sum(rank_counts == 2)
+  
+  #Calculate three_of_a_kind_count by counting how many elements in the vector rank_counts are equal to 3.
+  three_of_a_kind_count <- sum(rank_counts == 3)
+  
+  #Calculate four_of_a_kind_count by counting how many elements in the vector rank_counts are equal to 4.
+  four_of_a_kind_count <- sum(rank_counts == 4)
+  
+  #Create a if condition, where the loop starts when both is_flush and is_straight 
+  if (is_flush && is_straight) {
+    if (max(ranks) == 14) {
+      return("Royal Flush")
+    } else {
+      return("Straight Flush")
+    }
+  } else if (four_of_a_kind_count == 1) {
+    return("Four of a Kind")
+  } else if (three_of_a_kind_count == 1 && pair_count == 1) {
+    return("Full House")
+  } else if (is_flush) {
+    return("Flush")
+  } else if (is_straight) {
+    return("Straight")
+  } else if (three_of_a_kind_count == 1) {
+    return("Three of a Kind")
+  } else if (pair_count == 2) {
+    return("Two Pairs")
+  } else if (pair_count == 1) {
+    return("One Pair")
+  } else {
+    return("High Card")
+  }
+}
+
+# Function to deal a round of poker hands
+dealPokerHands <- function(num_players) {
+  
+  #Define suits and ranks
+  suits <- c("Hearts", "Diamonds", "Clubs", "Spades")
+  ranks <- c(2:10, "Jack", "Queen", "King", "Ace")
+  
+  #Create a deck of cards by creating a data frame deck from all combinations of vectors ranks and suits
+  deck <- expand.grid(rank = ranks, suit = suits)
+  
+  #Shuffle the deck and for reproducibility, set.seed(123) to set the seed for the random number generator.
+  set.seed(123) 
+  shuffled_deck <- deck[sample(nrow(deck)), ]
+  
+  #split the shuffled_deck into subsets based on the values from 1 to num_players
+  hands <- split(shuffled_deck, 1:num_players)
+  
+  #Identify and display each player's hand
+  for (i in 1:num_players) {
+    player_hand <- hands[[i]]
+    player_suits <- player_hand$suit
+    player_ranks <- player_hand$rank
+    hand_name <- identifyPokerHand(player_suits, player_ranks)
+    
+    #Print text to the console
+    cat("Player", i, "Hand:", paste(player_ranks, player_suits), "- Hand Name:", hand_name, "\n")
+  }
+}
+```
+
+\(d\)
+
+1.  Inputs and Outputs: The functions above takes the number of players as input and prints the hands and their names as output.
+
+2.  Validity of Hands: The function above creates a deck of 52 cards in the standard format and distributes 5 cards to each player which makes it validity.
+
+3.  Accuracy of Hand Names: The 'identifyPokerHand' function accurately determine the names of the poker hands based on the ranks and suits of the cards.
+
+4.  Duplicates: The function effectively shuffles the deck which ensures that there are no duplicate cards across hands.
+
+5.  Handling More than 10 Hands: The function cannot be applied to cases where the number of players exceeds the number of cards in a standard deck.
+
+Above all, the above procedures take the number of players as input and prints the hands and their names as output, produces accurate results and accurately deals poker hands, determine the names of the poker hands and ensures the validity of the hands while handling a reasonable number of players.

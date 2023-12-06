@@ -1,0 +1,59 @@
+---
+title: "STAT506HW7"
+format: html
+editor: visual
+---
+
+```{r}
+library("tidyverse")
+library("nycflights13")
+library("dplyr")
+```
+
+```{r}
+data("flights")
+colnames(flights)
+```
+
+```{r}
+bootstrap <- function(data, n) {
+  bootstrap_means <- vector("list", n)
+    origins <- unique(data$origin)
+  for (i in 1:n) {
+    means <- numeric(length(origins))
+    
+    for (j in seq_along(origins)) {
+      sample_data <- data %>% 
+        filter(origin == origins[j]) %>% 
+        sample_n(size = n(), replace = TRUE)
+      
+      means[j] <- mean(sample_data$air_time, na.rm = TRUE)
+    }
+    
+    bootstrap_means[[i]] <- means
+  }
+  
+  return(bootstrap_means)
+}
+
+n <- 1000
+
+# Run the stratified bootstrap function
+set.seed(123) 
+bootstrap_results <- bootstrap(flights, n)
+
+bootstrap_estimates <- data.frame(
+  origin = unique(flights$origin),
+  mean_air_time = sapply(1:length(bootstrap_results[[1]]), function(i) {
+    mean(sapply(bootstrap_results, function(x) x[i]))
+  }),
+  lower_ci = sapply(1:length(bootstrap_results[[1]]), function(i) {
+    quantile(sapply(bootstrap_results, function(x) x[i]), probs = 0.025)
+  }),
+  upper_ci = sapply(1:length(bootstrap_results[[1]]), function(i) {
+    quantile(sapply(bootstrap_results, function(x) x[i]), probs = 0.975)
+  })
+)
+
+print(bootstrap_estimates)
+```

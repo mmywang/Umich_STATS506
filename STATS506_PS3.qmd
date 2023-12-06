@@ -1,0 +1,404 @@
+---
+title: "STATS506_PS3"
+output:
+  toc: true
+format: pdf
+editor: visual
+---
+
+## Question1
+
+1(a)
+
+``` stata
+*read file
+. import sasxport5 "/Users/meredithwang/Desktop/Course/STAT506/Umich_stats506/Week3/VIX_D.XPT",clear
+
+
+. save "VIX_D.dta", replace
+file VIX_D.dta saved
+
+. 
+. import sasxport5 "/Users/meredithwang/Desktop/Course/STAT506/Umich_stats506/Week3/DEMO_D.XPT",clear
+
+. 
+. save "DEMO_D.dta", replace
+file DEMO_D.dta saved
+```
+
+``` stata
+. 
+. use "VIX_D.dta", clear
+
+. merge 1:1 seqn using "DEMO_D.dta"
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                         3,368
+        from master                         0  (_merge==1)
+        from using                      3,368  (_merge==2)
+
+    Matched                             6,980  (_merge==3)
+    -----------------------------------------
+
+. keep if _merge == 3
+(3,368 observations deleted)
+
+. drop _merge
+
+. save "merged_data.dta", replace
+file merged_data.dta saved
+
+. describe, size
+
+Contains data from merged_data.dta
+ Observations:         6,980                  
+    Variables:            99                  9 Oct 2023 23:43
+         Size:     5,528,160                  
+```
+
+1(b)
+
+``` stata
+. gen age_bracket = .
+(6,980 missing values generated)
+
+. gen age_bracket_str = string(age_bracket, "%9.0f")
+
+. replace age_bracket_str = "0-9" if ridageyr >= 0.0 & ridageyr < 10.0
+(0 real changes made)
+
+. replace age_bracket_str = "10-19" if ridageyr >= 10.0 & ridageyr < 20.0
+variable age_bracket_str was str1 now str5
+(2,207 real changes made)
+
+. replace age_bracket_str = "20-29" if ridageyr >= 20.0 & ridageyr < 30.0
+(1,021 real changes made)
+
+. replace age_bracket_str = "30-39" if ridageyr >= 30.0 & ridageyr < 40.0
+(818 real changes made)
+
+. replace age_bracket_str = "40-49" if ridageyr >= 40.0 & ridageyr < 50.0
+(815 real changes made)
+
+. replace age_bracket_str = "50-59" if ridageyr >= 50.0 & ridageyr < 60.0
+(631 real changes made)
+
+. replace age_bracket_str = "60-69" if ridageyr >= 60.0 & ridageyr < 70.0
+(661 real changes made)
+
+. replace age_bracket_str = "70-79" if ridageyr >= 70.0 & ridageyr < 80.0
+(469 real changes made)
+
+. replace age_bracket_str = "80-89" if ridageyr >= 80.0 & ridageyr < 90.0
+(358 real changes made)
+```
+
+``` stata
+. tabulate age_bracket_str viq220, row nofreq
+
+           | Glasses/contact lenses worn for
+age_bracke |             distance
+     t_str |         1          2          9 |     Total
+-----------+---------------------------------+----------
+     10-19 |     32.09      67.91       0.00 |    100.00 
+     20-29 |     32.59      67.20       0.21 |    100.00 
+     30-39 |     35.87      64.13       0.00 |    100.00 
+     40-49 |     37.00      63.00       0.00 |    100.00 
+     50-59 |     55.01      44.99       0.00 |    100.00 
+     60-69 |     62.22      37.78       0.00 |    100.00 
+     70-79 |     66.89      33.11       0.00 |    100.00 
+     80-89 |     66.88      33.12       0.00 |    100.00 
+-----------+---------------------------------+----------
+     Total |     42.23      57.74       0.03 |    100.00 
+```
+
+``` stata
+. recode viq220 (1=1) (2=0), generate(viq220_binary)
+(3,780 differences between viq220 and viq220_binary)
+
+. logit viq220_binary ridageyr if viq220_binary != .
+. estimates store model1
+
+. logit viq220_binary ridageyr riagendr ridreth1 if viq220_binary != .
+
+. estimates store model2
+
+. logit viq220_binary ridageyr riagendr ridreth1 indfmpir if viq220_binary != .
+
+. estimates store model3
+
+. esttab model1 model2 model3, eform cells(b(star fmt(3)) se(par fmt(3))) stats(N ll r2_p aic, labels("Sample Size" "Log likelih
+> ood" "Pseudo R^2" "AIC")) mtitle("Model 1" "Model 2" "Model 3") label
+```
+
+``` stata
+--------------------------------------------------------------------
+                              (1)             (2)             (3)   
+                          Model 1         Model 2         Model 3   
+                             b/se            b/se            b/se   
+--------------------------------------------------------------------
+RECODE of viq220 (~c                                                
+Age at Screening A~R        1.025***        1.025***        1.024***
+                          (0.001)         (0.001)         (0.001)   
+Gender                                      1.648***        1.682***
+                                          (0.087)         (0.091)   
+Race/Ethnicity - R~e                        1.132***        1.097***
+                                          (0.025)         (0.026)   
+Family PIR                                                  1.154***
+                                                          (0.020)   
+--------------------------------------------------------------------
+Sample Size              6547.000        6547.000        6249.000   
+Log likelihood          -4237.979       -4177.128       -3967.104   
+Pseudo R^2                  0.050           0.063           0.069   
+AIC                      8479.959        8362.257        7944.208   
+--------------------------------------------------------------------
+Exponentiated coefficients
+```
+
+1(d)
+
+``` stata
+. prtest viq220_binary_clean, by(riagendr)
+
+Two-sample test of proportions                     1: Number of obs =     3195
+                                                   2: Number of obs =     3350
+------------------------------------------------------------------------------
+       Group |       Mean   Std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+           1 |   .3696401   .0085398                      .3529023    .3863778
+           2 |   .4728358   .0086259                      .4559293    .4897423
+-------------+----------------------------------------------------------------
+        diff |  -.1031958   .0121382                     -.1269861   -.0794054
+             |  under H0:   .0122146    -8.45   0.000
+------------------------------------------------------------------------------
+        diff = prop(1) - prop(2)                                  z =  -8.4485
+    H0: diff = 0
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(Z < z) = 0.0000         Pr(|Z| > |z|) = 0.0000          Pr(Z > z) = 1.0000
+```
+
+There is a statistically significant difference between the proportions of the two groups for male and female. Given the p-value (0.0000), we reject the null hypothesis that there is no difference between the proportions of the two groups. This indicates a significant difference in the proportions of wearing glasses/contact lenses between genders.
+
+## Question2
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+```
+
+```{r}
+sakila <- dbConnect(RSQLite::SQLite(),"sakila_master.db")
+#x is a SQL query
+get_query <- function(x){
+  dbGetQuery(sakila,x)
+}
+#get tables in this database
+dbListTables(sakila)
+```
+
+2(a)
+
+```{r}
+#Get the information for film and language table
+dbListFields(sakila,"film")
+dbListFields(sakila,"language")
+```
+
+```{r}
+#Use R to solve the question
+film_data <- get_query("
+    SELECT l.name as film_language, film_id, title as film_name
+    FROM language l
+    RIGHT JOIN film f ON l.language_id = f.language_id
+")
+most_common_language <- film_data %>%
+  filter(film_language != "English") %>%
+  group_by(film_language) %>%
+  summarise(number_of_films = n()) %>%
+  arrange(-number_of_films) %>%
+  head(1)
+print(most_common_language)
+```
+
+```{r}
+#Use SQL to solve the question
+get_query("
+  SELECT l.name,COUNT(f.film_id)
+  FROM language l
+  LEFT JOIN film f ON l.language_id = f.language_id
+  WHERE l.name <> 'English'
+  GROUP BY l.name
+  ORDER BY COUNT(f.film_id)  DESC
+")
+```
+
+From above, we can find that there's no film uses language apart from English.
+
+2(b)
+
+```{r}
+#Use R to solve the question
+genre_data <- get_query("SELECT c.name AS genre_name, f.film_id AS film_id, fc.category_id AS category_id
+          FROM film f 
+          LEFT JOIN film_category fc ON fc.film_id = f.film_id 
+          LEFT JOIN category c ON c.category_id = fc.category_id")
+most_common_genre <- genre_data %>%
+  group_by(genre_name) %>%
+  summarise(number_of_films = n()) %>%
+  arrange(-number_of_films) %>%
+  head(1)
+print(most_common_genre)
+```
+
+```{r}
+#Use SQL to solve the question
+get_query("SELECT c.name AS genre_name, COUNT(f.film_id) AS Number_films
+          FROM film f 
+          LEFT JOIN film_category fc ON fc.film_id = f.film_id 
+          LEFT JOIN category c ON c.category_id = fc.category_id
+          GROUP BY fc.category_id
+          ORDER BY COUNT(f.film_id) DESC
+          LIMIT 1")
+```
+
+From the query above, we can find that the most common genre of movie is Sports in the data and there are 74 number of movie of this genre.
+
+2(c)
+
+```{r}
+#Use R
+#First we get the table
+customer_list <- get_query("SELECT * FROM customer_list")
+country <- customer_list%>%
+  group_by(country)%>%
+  summarise(number_of_customers = length(unique(ID))) %>%
+  filter(number_of_customers == 9)
+print(country)
+```
+
+```{r}
+#Use SQL
+get_query("SELECT country, COUNT(ID) AS customer_number
+      FROM customer_list
+      GROUP BY country
+      HAVING COUNT(ID) = 9
+")
+```
+
+From above the result we can find that the United Kingdom has exactly 9 customers.
+
+## Question3
+
+```{r}
+#We load the data first into us500
+us500 <- read.csv("us-500.csv")
+colnames(us500)
+```
+
+3(a)
+
+```{r}
+#We calculate the proportion by finding email addresses are hosted at a domain with TLD ".net" first
+proportion <- sum(str_detect(us500$email, "\\.net$")) / nrow(us500)
+print(proportion)
+```
+
+The proportion of email addresses are hosted at a domain with TLD ".net" is 0.14
+
+3(b)
+
+```{r}
+#We calculate the proportion by finding email addresses have at least one non alphanumeric character  first
+proportion <- nrow(filter(us500,(str_detect(email, "[^a-zA-Z0-9@.]")))) / nrow(us500)
+print(proportion)
+```
+
+The proportion of email addresses have at least one non alphanumeric character is 0.248
+
+3(c)
+
+```{r}
+#We first calculate the first area code for phone1
+area_code1 = substr(us500$phone1, 1, 3)
+#We first calculate the first area code for phone2
+area_code2 = substr(us500$phone2, 1, 3) 
+area_codes <- c(area_code1, area_code2)
+area_code <- table(area_codes)
+most_common_area_code <- names(which.max(area_code))
+print(most_common_area_code)
+
+```
+
+Given above result, we can find that the most common area code amongst all phone numbers is 973.
+
+3(d)
+
+```{r}
+#We create a new column to get the apartment numbers
+us500 <- us500 %>%
+  mutate(apartment_number = as.numeric(str_extract(address, "\\d+$")))
+#filter out the missing value
+us500_clean_apartment_number <- us500 %>%
+  filter(!is.na(apartment_number))
+#calculate the log
+us500_clean_apartment_number <- us500_clean_apartment_number %>%
+  mutate(log_apartment_number = log(apartment_number))
+#plot
+hist(us500_clean_apartment_number$log_apartment_number, main = "Histogram of Log of Apartment Numbers", xlab = "Log of Apartment Number", ylab = "Frequency")
+```
+
+3(e)
+
+```{r}
+#Create the Benford function
+benford <- data.frame(
+  leading_digit = 0:9,
+  last_digit = 0:9,
+  expected_proportion = sapply(0:9, function(d) log10(1 + 1/(d+1)))
+)
+```
+
+```{r}
+#Get the leading digit of the department number
+leading_digit = as.numeric(substr(as.character(us500$apartment_number), 1, 1))
+
+#Calculate the distribution of the leading digit
+digit_distribution <- table(leading_digit) / sum(!is.na(leading_digit))
+#Combine the leading digit with Benford
+combined <- merge(digit_distribution, benford, by="leading_digit")
+#Plot 
+barplot(rbind(combined$Freq, combined$expected_proportion), beside=TRUE, col=c("green", "blue"),
+        main="Comparison of Leading Digit vs Benford's Law",
+        ylab="Proportion", xlab="Leading Digit",
+        names.arg=1:9,
+        legend.text= c("Observed", "Benford's Law"))
+```
+
+We can find that the apartment numbers don't seem to follow Benford's Law. Since the observed proportions don't align closely with the expected proportions, the data may not be real.
+
+3(f)
+
+```{r}
+#Get the last digit of the address number
+street_number <- as.numeric(str_extract(us500$address, "^\\d+"))
+last_digit = as.numeric(substr(as.character(street_number), nchar(street_number), nchar(street_number)))
+
+#Calculate the distribution of the leading digit
+last_digit_distribution <- table(last_digit) / sum(!is.na(last_digit))
+
+#Combine the leading digit with Benford
+combined2 <- merge(last_digit_distribution, benford, by="last_digit")
+#Plot 
+barplot(rbind(combined2$Freq, combined2$expected_proportion), beside=TRUE, col=c("green", "blue"),
+        main="Comparison of Leading Digit vs Benford's Law",
+        ylab="Proportion", xlab="Last Digit",
+        names.arg=0:9,
+        legend.text= c("Observed", "Benford's Law"))
+```
+
+From above result, we can find that the street numbers don't seem to follow Benford's Law. Since the observed proportions don't align closely with the expected proportions, the data may not be real.
